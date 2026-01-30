@@ -124,7 +124,7 @@ import apiUrl from '../../../config.js';
 
 const props = defineProps({
   oportunidadId: {
-    type: String,
+    type: [Number, String],
     required: true,
   },
   empresaNit: {
