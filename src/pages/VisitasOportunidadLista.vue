@@ -22,8 +22,8 @@
           <label>Estado</label>
           <select v-model="filtroEstado">
             <option value="">Todos</option>
-            <option v-for="opt in estadosVisita" :key="opt" :value="opt">
-              {{ opt }}
+            <option v-for="opt in estadosVisita" :key="opt.id" :value="opt.id">
+              {{ opt.nombre }}
             </option>
           </select>
         </div>
@@ -35,6 +35,7 @@
             <th>Oportunidad</th>
             <th>Asunto</th>
             <th>Tipo</th>
+            <th>Contacto</th>
             <th>Fecha</th>
             <th>Hora</th>
             <th>Estado</th>
@@ -44,7 +45,7 @@
         </thead>
         <tbody>
           <tr v-if="paginadas.length === 0">
-            <td colspan="8" class="empty">
+            <td colspan="9" class="empty">
               No hay visitas registradas.
             </td>
           </tr>
@@ -55,6 +56,7 @@
             </td>
             <td>{{ v.asunto }}</td>
             <td>{{ v.tipo }}</td>
+            <td>{{ v.contacto || '-' }}</td>
             <td>{{ v.fecha }}</td>
             <td>{{ v.hora }}</td>
             <td>{{ v.estado }}</td>
@@ -96,44 +98,52 @@
           <div class="form-grid">
             <div class="field">
               <label>Asunto</label>
-              <input v-model="modalDraft.asunto" type="text" />
+              <input v-model="modalDraft.asunto" type="text" :disabled="esCompletada" />
             </div>
 
             <div class="field">
               <label>Tipo</label>
-              <select v-model="modalDraft.tipo">
+              <select v-model="modalDraft.tipo_id" :disabled="esCompletada">
                 <option value="">-- Seleccione --</option>
-                <option v-for="opt in tiposVisita" :key="opt" :value="opt">
-                  {{ opt }}
+                <option v-for="opt in tiposVisita" :key="opt.id" :value="opt.id">
+                  {{ opt.nombre }}
                 </option>
               </select>
+            </div>
+
+            <div class="field">
+              <label>Contacto</label>
+              <input v-model="modalDraft.contacto" type="text" :disabled="esCompletada" />
             </div>
 
             <div class="field full">
               <label>Objetivo</label>
-              <input v-model="modalDraft.objetivo" type="text" />
+              <input v-model="modalDraft.objetivo" type="text" :disabled="esCompletada" />
             </div>
 
             <div class="field">
               <label>Fecha</label>
-              <input v-model="modalDraft.fecha" type="date" />
+              <input v-model="modalDraft.fecha" type="date" :disabled="esCompletada" />
             </div>
 
             <div class="field">
               <label>Hora</label>
-              <input v-model="modalDraft.hora" type="time" />
+              <input v-model="modalDraft.hora" type="time" :disabled="esCompletada" />
             </div>
 
             <div class="field">
               <label>Estado</label>
-              <select v-model="modalDraft.estado">
-                <option v-for="opt in estadosVisita" :key="opt" :value="opt">
-                  {{ opt }}
+              <select v-model="modalDraft.estado_id" :disabled="esCompletada">
+                <option v-for="opt in estadosVisita" :key="opt.id" :value="opt.id">
+                  {{ opt.nombre }}
                 </option>
               </select>
-              <p class="hint">
+              <p class="hint" v-if="!esCompletada">
                 Al pasar de <b>Abierto</b> a <b>Completado/Aplazado/Cancelado</b>,
                 se registra el cierre real automáticamente.
+              </p>
+              <p class="hint" v-else style="color: #d97706;">
+                <b>Esta visita está completada y no puede ser modificada.</b>
               </p>
             </div>
 
@@ -149,8 +159,8 @@
         </div>
 
         <div class="modal-actions">
-          <button class="btn-outline" type="button" @click="cerrarModal">Cancelar</button>
-          <button class="btn-primary" type="button" @click="guardarEdicion">Guardar</button>
+          <button class="btn-outline" type="button" @click="cerrarModal">{{ esCompletada ? 'Cerrar' : 'Cancelar' }}</button>
+          <button v-if="!esCompletada" class="btn-primary" type="button" @click="guardarEdicion">Guardar</button>
         </div>
       </div>
     </div>
@@ -159,117 +169,169 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { listVisitasOportunidadGlobal, listOportunidades, upsertVisitaOportunidad } from '../services/store';
+import axios from 'axios';
+import apiUrl from '../../config.js';
 
 const visitas = ref([]);
 const busqueda = ref('');
 const filtroEstado = ref('');
 const pagina = ref(1);
-const pageSize = 10;
+const pageSize = 30;
+const totalRegistros = ref(0);
+const totalPaginas = ref(1);
+const cargando = ref(false);
 
-const estadosVisita = ['Abierto', 'Completado', 'Aplazado', 'Cancelado'];
+const estadosVisita = [
+  { id: 1, nombre: 'Abierto' },
+  { id: 2, nombre: 'Completado' },
+  { id: 3, nombre: 'Aplazado' },
+  { id: 4, nombre: 'Cancelado' }
+];
 
 const tiposVisita = [
-  'Visita de Prospección',
-  'Visita de Seguimiento y Cierre de Negocios',
-  'Visita de Ejecución de Proyectos y Contratos',
-  'Seguimiento a Cotización por Medios Electrónicos',
-  'Llamada de Prospección',
-  'Llamada de Seguimiento y Cierre de Negocios',
-  'Llamada de Ejecución de Proyectos y Contratos',
-  'Visita de seguimiento Postventa',
-  'Llamada de seguimiento Postventa',
+  { id: 1, nombre: 'Visita de Prospección' },
+  { id: 2, nombre: 'Visita de Seguimiento y Cierre de Negocios' },
+  { id: 3, nombre: 'Visita de Ejecución de Proyectos y Contratos' },
+  { id: 4, nombre: 'Seguimiento a Cotización por Medios Electrónicos' },
+  { id: 5, nombre: 'Llamada de Prospección' },
+  { id: 6, nombre: 'Llamada de Seguimiento y Cierre de Negocios' },
+  { id: 7, nombre: 'Llamada de Ejecución de Proyectos y Contratos' },
+  { id: 8, nombre: 'Visita de seguimiento Postventa' },
+  { id: 9, nombre: 'Llamada de seguimiento Postventa' }
 ];
 
 // Modal
 const showModal = ref(false);
 const modalDraft = ref({});
+const estadoOriginal = ref(null); // Estado original de la visita desde BD
 
-function cargar() {
-  const todasVisitas = listVisitasOportunidadGlobal();
-  const ops = listOportunidades();
-  const mapOps = new Map();
-  ops.forEach((o) => {
-    mapOps.set(o.id, {
-      numero: o.numero_oportunidad,
-      nombre: o.nombre_oportunidad,
-    });
-  });
+// Computed para determinar si la visita está completada y debe ser solo lectura
+const esCompletada = computed(() => {
+  return estadoOriginal.value === 2; // 2 = Completado
+});
 
-  visitas.value = todasVisitas.map((v) => {
-    const op = mapOps.get(v.oportunidadId);
-    return {
-      ...v,
-      opNumero: op ? op.numero : null,
-      opNombre: op ? op.nombre : null,
-    };
-  });
+async function cargar() {
+  cargando.value = true;
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/visitas/listar-global`,
+      {
+        pagina: pagina.value,
+        limite: pageSize,
+        busqueda: busqueda.value,
+        estado_id: filtroEstado.value !== '' ? parseInt(filtroEstado.value) : null
+      },
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+
+    if (response.data.code === 200) {
+      const data = response.data.data;
+      visitas.value = data.visitas.map(v => ({
+        id: v.id,
+        oportunidadId: v.oportunidad_id,
+        opNumero: v.op_numero,
+        opNombre: v.op_nombre,
+        asunto: v.asunto,
+        tipo: v.tipo_nombre,
+        tipo_id: v.tipo_id,
+        fecha: v.fecha_hora ? v.fecha_hora.split('T')[0] : '',
+        hora: v.fecha_hora ? v.fecha_hora.split('T')[1]?.substring(0, 5) : '',
+        estado: v.estado_nombre,
+        estado_id: v.estado_id,
+        objetivo: v.objetivo,
+        contacto: v.contacto,
+        fecha_cierre_real: v.fecha_cierre_real,
+        fecha_hora_original: v.fecha_hora
+      }));
+      totalRegistros.value = data.total;
+      totalPaginas.value = data.total_paginas;
+    }
+  } catch (error) {
+    console.error('Error cargando visitas:', error);
+  } finally {
+    cargando.value = false;
+  }
 }
 
 function abrirEditar(v) {
-  modalDraft.value = { ...v }; // copia completa para editar
+  // Guardar el estado original para determinar si está completada
+  estadoOriginal.value = v.estado_id;
+  
+  modalDraft.value = { ...v };
   showModal.value = true;
 }
 
 function cerrarModal() {
   showModal.value = false;
   modalDraft.value = {};
+  estadoOriginal.value = null;
 }
 
-function guardarEdicion() {
-  if (!modalDraft.value.asunto || !modalDraft.value.tipo || !modalDraft.value.fecha) {
+async function guardarEdicion() {
+  if (!modalDraft.value.asunto || !modalDraft.value.tipo_id || !modalDraft.value.fecha) {
     alert('Asunto, tipo y fecha son obligatorios.');
     return;
   }
 
-  // Guardamos SOLO lo que pertenece al modelo de visita (sin opNumero/opNombre)
-  const { opNumero, opNombre, ...toSave } = modalDraft.value;
-  upsertVisitaOportunidad({ ...toSave });
+  // Obtener nombres basados en los IDs seleccionados
+  const tipoSeleccionado = tiposVisita.find(t => t.id === modalDraft.value.tipo_id);
+  const estadoSeleccionado = estadosVisita.find(e => e.id === modalDraft.value.estado_id);
 
-  cerrarModal();
-  cargar();
+  // Preparar datos para enviar al backend
+  const fechaHora = `${modalDraft.value.fecha}T${modalDraft.value.hora || '00:00'}`;
+  
+  const dataToSave = {
+    id: modalDraft.value.id,
+    oportunidad_id: modalDraft.value.oportunidadId,
+    asunto: modalDraft.value.asunto,
+    tipo_id: modalDraft.value.tipo_id,
+    tipo_nombre: tipoSeleccionado?.nombre || '',
+    objetivo: modalDraft.value.objetivo || '',
+    contacto: modalDraft.value.contacto || '',
+    fecha_hora: fechaHora,
+    estado_id: modalDraft.value.estado_id,
+    estado_nombre: estadoSeleccionado?.nombre || ''
+  };
+
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/visitas/guardar`,
+      dataToSave,
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+
+    if (response.data.code === 200 || response.data.code === 201) {
+      cerrarModal();
+      cargar();
+    } else {
+      alert('Error al guardar la visita');
+    }
+  } catch (error) {
+    console.error('Error guardando visita:', error);
+    alert('Error al guardar la visita');
+  }
 }
 
-const filtradas = computed(() => {
-  const term = busqueda.value.trim().toLowerCase();
-  const estado = filtroEstado.value;
-
-  return visitas.value.filter((v) => {
-    let ok = true;
-
-    if (term) {
-      const txt =
-        (v.asunto || '') +
-        ' ' +
-        (v.tipo || '') +
-        ' ' +
-        (v.opNumero || '') +
-        ' ' +
-        (v.opNombre || '');
-      if (!txt.toLowerCase().includes(term)) ok = false;
-    }
-
-    if (estado && v.estado !== estado) ok = false;
-
-    return ok;
-  });
-});
-
-const totalPaginas = computed(() =>
-  filtradas.value.length === 0 ? 1 : Math.ceil(filtradas.value.length / pageSize)
-);
-
-const paginadas = computed(() => {
-  const start = (pagina.value - 1) * pageSize;
-  return filtradas.value.slice(start, start + pageSize);
-});
+const paginadas = computed(() => visitas.value);
 
 function paginaAnterior() {
-  if (pagina.value > 1) pagina.value -= 1;
+  if (pagina.value > 1) {
+    pagina.value -= 1;
+  }
 }
 
 function paginaSiguiente() {
-  if (pagina.value < totalPaginas.value) pagina.value += 1;
+  if (pagina.value < totalPaginas.value) {
+    pagina.value += 1;
+  }
 }
 
 function formatDateTime(str) {
@@ -281,8 +343,13 @@ function formatDateTime(str) {
   }
 }
 
+watch([pagina], () => {
+  cargar();
+});
+
 watch([busqueda, filtroEstado], () => {
   pagina.value = 1;
+  cargar();
 });
 
 onMounted(() => {

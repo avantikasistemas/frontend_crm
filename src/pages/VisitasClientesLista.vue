@@ -19,46 +19,81 @@
       <div class="form-grid">
         <div class="field">
           <label>Cliente</label>
-          <input v-model="draft.cliente_nombre" type="text" />
+          <div class="search-input-wrapper">
+            <input 
+              v-model="clienteDisplay" 
+              type="text" 
+              placeholder="Buscar por NIT o nombre..."
+              @input="onSearchCliente"
+              @focus="showSuggestions = true"
+              @blur="onBlurCliente"
+              :disabled="esCompletada"
+            />
+            <div v-if="showSuggestions && filteredTerceros.length > 0" class="suggestions">
+              <div 
+                v-for="tercero in filteredTerceros" 
+                :key="tercero.nit"
+                class="suggestion-item"
+                @mousedown.prevent="selectTercero(tercero)"
+              >
+                <div class="suggestion-title">{{ tercero.nombres }}</div>
+                <div class="suggestion-subtitle">NIT: {{ tercero.nit }} • {{ tercero.ciudad }} • {{ tercero.ejecutivo }} • {{ tercero.zona }}</div>
+              </div>
+            </div>
+            <div v-if="isSearching" class="loading-indicator">Buscando...</div>
+          </div>
         </div>
 
         <div class="field">
           <label>Asunto</label>
-          <input v-model="draft.asunto" type="text" />
+          <input v-model="draft.asunto" type="text" :disabled="esCompletada" />
         </div>
 
         <div class="field">
           <label>Tipo</label>
-          <select v-model="draft.tipo">
+          <select v-model="draft.tipo_id" @change="onTipoChange" :disabled="esCompletada">
             <option value="">-- Seleccione --</option>
-            <option v-for="opt in tiposVisita" :key="opt" :value="opt">
-              {{ opt }}
+            <option v-for="opt in tiposVisita" :key="opt.id" :value="opt.id">
+              {{ opt.nombre }}
             </option>
           </select>
         </div>
 
         <div class="field">
-          <label>Fecha</label>
-          <input v-model="draft.fecha" type="date" />
+          <label>Contacto</label>
+          <select v-model="draft.contacto" :disabled="esCompletada">
+            <option value="">-- Seleccione --</option>
+            <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
+              {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
+            </option>
+          </select>
+          <p class="hint" v-if="contactos.length === 0">No hay contactos disponibles</p>
         </div>
 
         <div class="field">
-          <label>Hora</label>
-          <input v-model="draft.hora" type="time" />
+          <label>Fecha y Hora de Visita</label>
+          <input v-model="draft.fecha_hora" type="datetime-local" :disabled="esCompletada" />
         </div>
 
         <div class="field">
           <label>Estado</label>
-          <select v-model="draft.estado">
-            <option v-for="opt in estadosVisita" :key="opt" :value="opt">
-              {{ opt }}
+          <select v-model="draft.estado_id" @change="onEstadoChange" :disabled="esCompletada">
+            <option v-for="opt in estadosVisita" :key="opt.id" :value="opt.id">
+              {{ opt.nombre }}
             </option>
           </select>
+          <p class="hint" v-if="!esCompletada">
+            Al pasar de <b>Abierto</b> a <b>Completado/Aplazado/Cancelado</b>,
+            se guardará automáticamente el cierre real.
+          </p>
+          <p class="hint" v-else style="color: #d97706;">
+            <b>Esta visita está completada y no puede ser modificada.</b>
+          </p>
         </div>
 
         <div class="field full">
           <label>Objetivo</label>
-          <input v-model="draft.objetivo" type="text" />
+          <input v-model="draft.objetivo" type="text" :disabled="esCompletada" />
         </div>
 
         <div class="field full">
@@ -68,14 +103,11 @@
             :value="draft.fecha_cierre_real ? formatDateTime(draft.fecha_cierre_real) : '—'"
             disabled
           />
-          <p class="hint">
-            Se registra cuando cambias de <b>Abierto</b> a <b>Completado/Aplazado/Cancelado</b>.
-          </p>
         </div>
       </div>
 
       <div class="actions">
-        <button type="button" class="btn-primary" @click="guardarVisita">
+        <button v-if="!esCompletada" type="button" class="btn-primary" @click="guardarVisita">
           {{ editando ? 'Guardar cambios' : 'Guardar visita' }}
         </button>
       </div>
@@ -95,8 +127,8 @@
           <label>Estado</label>
           <select v-model="filtroEstado">
             <option value="">Todos</option>
-            <option v-for="opt in estadosVisita" :key="opt" :value="opt">
-              {{ opt }}
+            <option v-for="opt in estadosVisita" :key="opt.id" :value="opt.id">
+              {{ opt.nombre }}
             </option>
           </select>
         </div>
@@ -108,8 +140,8 @@
             <th>Cliente</th>
             <th>Asunto</th>
             <th>Tipo</th>
-            <th>Fecha</th>
-            <th>Hora</th>
+            <th>Contacto</th>
+            <th>Fecha y Hora</th>
             <th>Estado</th>
             <th>Cierre real</th>
             <th style="width: 90px;">Acción</th>
@@ -123,8 +155,8 @@
             <td>{{ v.cliente_nombre }}</td>
             <td>{{ v.asunto }}</td>
             <td>{{ v.tipo }}</td>
-            <td>{{ v.fecha }}</td>
-            <td>{{ v.hora }}</td>
+            <td>{{ v.contacto || '-' }}</td>
+            <td>{{ formatDateTime(v.fecha_hora) }}</td>
             <td>{{ v.estado }}</td>
             <td>{{ v.fecha_cierre_real ? formatDateTime(v.fecha_cierre_real) : '—' }}</td>
             <td class="actions-cell">
@@ -153,112 +185,297 @@
 
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
-import { listVisitasCliente, upsertVisitaCliente } from '../services/store';
+import axios from 'axios';
+import apiUrl from '../../config.js';
 
 const visitas = ref([]);
 const busqueda = ref('');
 const filtroEstado = ref('');
 const pagina = ref(1);
-const pageSize = 10;
+const pageSize = 30;
+const totalRegistros = ref(0);
+const totalPaginas = ref(1);
+const cargando = ref(false);
 
 const editando = ref(false);
 const draft = ref(crearDraft());
+const estadoOriginal = ref(null); // Estado original de la visita desde BD
 
-const tiposVisita = [
-  'Visita de Prospección',
-  'Visita de Seguimiento y Cierre de Negocios',
-  'Visita de Ejecución de Proyectos y Contratos',
-  'Seguimiento a Cotización por Medios Electrónicos',
-  'Llamada de Prospección',
-  'Llamada de Seguimiento y Cierre de Negocios',
-  'Llamada de Ejecución de Proyectos y Contratos',
-  'Visita de seguimiento Postventa',
-  'Llamada de seguimiento Postventa',
+// Computed para determinar si la visita está completada y debe ser solo lectura
+const esCompletada = computed(() => {
+  return editando.value && estadoOriginal.value === 2; // 2 = Completado
+});
+
+// Para búsqueda de terceros/clientes
+const terceros = ref([]);
+const filteredTerceros = ref([]);
+const showSuggestions = ref(false);
+const isSearching = ref(false);
+const clienteDisplay = ref('');
+let searchTimeout = null;
+
+// Para contactos
+const contactos = ref([]);
+
+const estadosVisita = [
+  { id: 1, nombre: 'Abierto' },
+  { id: 2, nombre: 'Completado' },
+  { id: 3, nombre: 'Aplazado' },
+  { id: 4, nombre: 'Cancelado' }
 ];
 
-const estadosVisita = ['Abierto', 'Completado', 'Aplazado', 'Cancelado'];
+const tiposVisita = [
+  { id: 1, nombre: 'Visita de Prospección' },
+  { id: 2, nombre: 'Visita de Seguimiento y Cierre de Negocios' },
+  { id: 3, nombre: 'Visita de Ejecución de Proyectos y Contratos' },
+  { id: 4, nombre: 'Seguimiento a Cotización por Medios Electrónicos' },
+  { id: 5, nombre: 'Llamada de Prospección' },
+  { id: 6, nombre: 'Llamada de Seguimiento y Cierre de Negocios' },
+  { id: 7, nombre: 'Llamada de Ejecución de Proyectos y Contratos' },
+  { id: 8, nombre: 'Visita de seguimiento Postventa' },
+  { id: 9, nombre: 'Llamada de seguimiento Postventa' }
+];
 
 function crearDraft() {
   return {
     id: null,
+    cliente_nit: '',
     cliente_nombre: '',
     asunto: '',
-    tipo: '',
+    tipo_id: '',
+    tipo_nombre: '',
+    contacto: '',
     objetivo: '',
-    fecha: '',
-    hora: '',
-    estado: 'Abierto',
+    fecha_hora: '',
+    estado_id: 1,
+    estado_nombre: 'Abierto',
     fecha_cierre_real: null,
   };
 }
 
-function cargar() {
-  visitas.value = listVisitasCliente();
+async function cargar() {
+  cargando.value = true;
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/visitas-clientes/listar`,
+      {
+        pagina: pagina.value,
+        limite: pageSize,
+        busqueda: busqueda.value,
+        estado_id: filtroEstado.value !== '' ? parseInt(filtroEstado.value) : null
+      },
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+
+    if (response.data.code === 200) {
+      const data = response.data.data;
+      visitas.value = data.visitas.map(v => ({
+        id: v.id,
+        cliente_nit: v.cliente_nit,
+        cliente_nombre: v.cliente_nombre,
+        asunto: v.asunto,
+        tipo: v.tipo_nombre,
+        tipo_id: v.tipo_id,
+        tipo_nombre: v.tipo_nombre,
+        contacto: v.contacto,
+        objetivo: v.objetivo,
+        fecha_hora: v.fecha_hora,
+        estado: v.estado_nombre,
+        estado_id: v.estado_id,
+        estado_nombre: v.estado_nombre,
+        fecha_cierre_real: v.fecha_cierre_real
+      }));
+      totalRegistros.value = data.total;
+      totalPaginas.value = data.total_paginas;
+    }
+  } catch (error) {
+    console.error('Error cargando visitas de clientes:', error);
+  } finally {
+    cargando.value = false;
+  }
 }
 
 function editar(v) {
   draft.value = { ...v };
+  estadoOriginal.value = v.estado_id;
   editando.value = true;
+  clienteDisplay.value = v.cliente_nombre;
+  
+  // Cargar contactos del cliente
+  if (v.cliente_nit) {
+    cargarContactos(v.cliente_nit);
+  }
+  
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function cancelarEdicion() {
   draft.value = crearDraft();
+  estadoOriginal.value = null;
   editando.value = false;
+  clienteDisplay.value = '';
+  contactos.value = [];
 }
 
-function guardarVisita() {
-  if (!draft.value.cliente_nombre || !draft.value.asunto || !draft.value.fecha) {
-    alert('Cliente, asunto y fecha son obligatorios.');
+async function guardarVisita() {
+  if (!draft.value.cliente_nit || !draft.value.asunto || !draft.value.tipo_id || !draft.value.fecha_hora) {
+    alert('Cliente, asunto, tipo y fecha son obligatorios.');
     return;
   }
 
-  upsertVisitaCliente({ ...draft.value });
-  cancelarEdicion();
-  cargar();
+  // Obtener nombres basados en los IDs
+  const tipoSeleccionado = tiposVisita.find(t => t.id === draft.value.tipo_id);
+  const estadoSeleccionado = estadosVisita.find(e => e.id === draft.value.estado_id);
+
+  const dataToSave = {
+    id: draft.value.id,
+    cliente_nit: draft.value.cliente_nit,
+    cliente_nombre: draft.value.cliente_nombre,
+    asunto: draft.value.asunto,
+    tipo_id: draft.value.tipo_id,
+    tipo_nombre: tipoSeleccionado?.nombre || '',
+    contacto: draft.value.contacto || '',
+    objetivo: draft.value.objetivo || '',
+    fecha_hora: draft.value.fecha_hora,
+    estado_id: draft.value.estado_id,
+    estado_nombre: estadoSeleccionado?.nombre || ''
+  };
+
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/visitas-clientes/guardar`,
+      dataToSave,
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+
+    if (response.data.code === 200 || response.data.code === 201) {
+      cancelarEdicion();
+      cargar();
+    } else {
+      alert('Error al guardar la visita');
+    }
+  } catch (error) {
+    console.error('Error guardando visita de cliente:', error);
+    alert('Error al guardar la visita');
+  }
 }
 
-const filtradas = computed(() => {
-  const term = busqueda.value.trim().toLowerCase();
-  const estado = filtroEstado.value;
+// Búsqueda de terceros/clientes
+async function onSearchCliente() {
+  const valor = clienteDisplay.value.trim();
+  
+  if (valor.length < 2) {
+    filteredTerceros.value = [];
+    return;
+  }
 
-  return visitas.value.filter((v) => {
-    let ok = true;
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(async () => {
+    isSearching.value = true;
+    try {
+      const response = await axios.post(
+        `${apiUrl}/oportunidades/terceros`,
+        { valor },
+        {
+          headers: {
+            Accept: "application/json",
+          }
+        }
+      );
 
-    if (term) {
-      const txt =
-        (v.cliente_nombre || '') +
-        ' ' +
-        (v.asunto || '') +
-        ' ' +
-        (v.tipo || '');
-      if (!txt.toLowerCase().includes(term)) ok = false;
+      if (response.data.code === 200) {
+        filteredTerceros.value = response.data.data;
+      }
+    } catch (error) {
+      console.error('Error buscando terceros:', error);
+    } finally {
+      isSearching.value = false;
     }
+  }, 300);
+}
 
-    if (estado && v.estado !== estado) ok = false;
+function selectTercero(tercero) {
+  draft.value.cliente_nit = tercero.nit;
+  draft.value.cliente_nombre = tercero.nombres;
+  clienteDisplay.value = tercero.nombres;
+  showSuggestions.value = false;
+  filteredTerceros.value = [];
+  
+  // Cargar contactos del tercero seleccionado
+  cargarContactos(tercero.nit);
+}
 
-    return ok;
-  });
-});
+function onBlurCliente() {
+  setTimeout(() => {
+    showSuggestions.value = false;
+  }, 200);
+}
 
-const totalPaginas = computed(() =>
-  filtradas.value.length === 0 ? 1 : Math.ceil(filtradas.value.length / pageSize)
-);
+// Cargar contactos
+async function cargarContactos(nit) {
+  if (!nit) {
+    contactos.value = [];
+    return;
+  }
 
-const paginadas = computed(() => {
-  const start = (pagina.value - 1) * pageSize;
-  return filtradas.value.slice(start, start + pageSize);
-});
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/contactos`,
+      { nit },
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+
+    if (response.data.code === 200) {
+      contactos.value = response.data.data;
+    }
+  } catch (error) {
+    console.error('Error cargando contactos:', error);
+    contactos.value = [];
+  }
+}
+
+function onTipoChange() {
+  const tipoSeleccionado = tiposVisita.find(t => t.id === draft.value.tipo_id);
+  if (tipoSeleccionado) {
+    draft.value.tipo_nombre = tipoSeleccionado.nombre;
+  }
+}
+
+function onEstadoChange() {
+  const estadoSeleccionado = estadosVisita.find(e => e.id === draft.value.estado_id);
+  if (estadoSeleccionado) {
+    draft.value.estado_nombre = estadoSeleccionado.nombre;
+  }
+}
+
+const paginadas = computed(() => visitas.value);
 
 function paginaAnterior() {
-  if (pagina.value > 1) pagina.value -= 1;
+  if (pagina.value > 1) {
+    pagina.value -= 1;
+  }
 }
 
 function paginaSiguiente() {
-  if (pagina.value < totalPaginas.value) pagina.value += 1;
+  if (pagina.value < totalPaginas.value) {
+    pagina.value += 1;
+  }
 }
 
 function formatDateTime(str) {
+  if (!str) return '—';
   try {
     const d = new Date(str);
     return d.toLocaleString();
@@ -267,8 +484,13 @@ function formatDateTime(str) {
   }
 }
 
+watch([pagina], () => {
+  cargar();
+});
+
 watch([busqueda, filtroEstado], () => {
   pagina.value = 1;
+  cargar();
 });
 
 onMounted(() => {
@@ -455,5 +677,60 @@ tr:hover td { background: #f7f8fc; }
 .pagination button:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+/* Estilos para búsqueda con sugerencias */
+.search-input-wrapper {
+  position: relative;
+}
+
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d3d7e4;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 100;
+  margin-top: 2px;
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.suggestion-item:hover {
+  background: #f7f8fc;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c425c;
+  margin-bottom: 2px;
+}
+
+.suggestion-subtitle {
+  font-size: 11px;
+  color: #7a7f8a;
+}
+
+.loading-indicator {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #7a7f8a;
 }
 </style>
