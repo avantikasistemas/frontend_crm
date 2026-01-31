@@ -4,7 +4,7 @@
     <div class="columns">
       <SeccionInformacionOportunidad :op="op" />
 
-      <SeccionGestionOportunidad :op="op" :estados="ESTADOS_OPORTUNIDAD" />
+      <SeccionGestionOportunidad :op="op" :estados="estados" />
     </div>
 
     <div v-if="errores.length" class="errors">
@@ -25,10 +25,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import SeccionInformacionOportunidad from './SeccionInformacionOportunidad.vue';
 import SeccionGestionOportunidad from './SeccionGestionOportunidad.vue';
+import { useCatalogos } from '../../services/useCatalogos.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -46,26 +47,19 @@ const props = defineProps({
 
 const emit = defineEmits(['save', 'cancel']);
 
-const ESTADOS_OPORTUNIDAD = [
-  { id: 1, nombre: 'Nueva' },
-  { id: 2, nombre: 'Identificacion de Decisores' },
-  { id: 3, nombre: 'Identificacion de Necesidades' },
-  { id: 4, nombre: 'Propuesta Técnica' },
-  { id: 5, nombre: 'Cubrimiento Base Técnica' },
-  { id: 6, nombre: 'Ajustes a Propuesta' },
-  { id: 7, nombre: 'Cubrimiento Base Jurídica' },
-  { id: 8, nombre: 'Cubrimiento Base Financiera' },
-  { id: 9, nombre: 'Prepliego Publicado para Observaciones' },
-  { id: 10, nombre: 'Pliego Publicado para Observaciones' },
-  { id: 11, nombre: 'Presentación De Propuesta Final' },
-  { id: 12, nombre: 'Propuesta En Evaluación' },
-  { id: 13, nombre: 'Revisión Y Observaciones A Evaluación' },
-  { id: 14, nombre: 'Aprobación Verbal' },
-  { id: 15, nombre: 'Propuesta Adjudicada' },
-  { id: 16, nombre: 'Cerrada Ganada' },
-  { id: 17, nombre: 'Cerrada Perdida' },
-  { id: 18, nombre: 'Cerrada Anulada' }
-];
+// Cargar catálogos desde la BD
+const { catalogos, cargarCatalogos } = useCatalogos();
+const estados = ref([]);
+
+// Cargar estados al montar el componente
+onMounted(async () => {
+  try {
+    await cargarCatalogos();
+    estados.value = catalogos.value.estados;
+  } catch (error) {
+    console.error('Error cargando estados:', error);
+  }
+});
 
 const errores = ref([]);
 

@@ -148,9 +148,10 @@
 </template>
 
 <script setup>
-import { ref, watch, defineEmits } from 'vue';
+import { ref, watch, defineEmits, onMounted } from 'vue';
 import axios from 'axios';
 import apiUrl from '../../../config.js';
+import { useCatalogos } from '../../services/useCatalogos.js';
 
 const props = defineProps({
   op: {
@@ -160,6 +161,32 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['guardar']);
+
+// Cargar catálogos desde la BD
+const { catalogos, cargarCatalogos } = useCatalogos();
+
+// Referencias a los catálogos
+const tiposRegistro = ref([]);
+const origenes = ref([]);
+const mediosIdentificacion = ref([]);
+const tiemposEjecucion = ref([]);
+const tiposProyecto = ref([]);
+const tiposContratacion = ref([]);
+
+// Cargar catálogos al montar el componente
+onMounted(async () => {
+  try {
+    await cargarCatalogos();
+    tiposRegistro.value = catalogos.value.tipoRegistros;
+    origenes.value = catalogos.value.origenes;
+    mediosIdentificacion.value = catalogos.value.mediosIdentificacion;
+    tiemposEjecucion.value = catalogos.value.tiemposEjecucion;
+    tiposProyecto.value = catalogos.value.tiposProyecto;
+    tiposContratacion.value = catalogos.value.tiposContratacion;
+  } catch (error) {
+    console.error('Error cargando catálogos:', error);
+  }
+});
 
 // Estado para el search input
 const empresaDisplay = ref('');
@@ -237,7 +264,7 @@ watch(() => [props.op.empresa_nombre, props.op.empresa_nit], ([nombre, nit]) => 
 }, { immediate: true });
 // Funciones onChange para guardar id y nombre
 const onTipoRegistroChange = () => {
-  const selected = tiposRegistro.find(opt => opt.id === props.op.tipo_registro);
+  const selected = tiposRegistro.value.find(opt => opt.id === props.op.tipo_registro);
   if (selected) {
     props.op.tipo_registro_id = selected.id;
     props.op.tipo_registro_nombre = selected.nombre;
@@ -245,7 +272,7 @@ const onTipoRegistroChange = () => {
 };
 
 const onOrigenChange = () => {
-  const selected = origenes.find(opt => opt.id === props.op.origen);
+  const selected = origenes.value.find(opt => opt.id === props.op.origen);
   if (selected) {
     props.op.origen_id = selected.id;
     props.op.origen_nombre = selected.nombre;
@@ -253,7 +280,7 @@ const onOrigenChange = () => {
 };
 
 const onMedioIdentificacionChange = () => {
-  const selected = mediosIdentificacion.find(opt => opt.id === props.op.medio_identificacion);
+  const selected = mediosIdentificacion.value.find(opt => opt.id === props.op.medio_identificacion);
   if (selected) {
     props.op.medio_identificacion_id = selected.id;
     props.op.medio_identificacion_nombre = selected.nombre;
@@ -261,7 +288,7 @@ const onMedioIdentificacionChange = () => {
 };
 
 const onTiempoEjecucionChange = () => {
-  const selected = tiemposEjecucion.find(opt => opt.id === props.op.tiempo_ejecucion);
+  const selected = tiemposEjecucion.value.find(opt => opt.id === props.op.tiempo_ejecucion);
   if (selected) {
     props.op.tiempo_ejecucion_id = selected.id;
     props.op.tiempo_ejecucion_nombre = selected.nombre;
@@ -269,7 +296,7 @@ const onTiempoEjecucionChange = () => {
 };
 
 const onTipoProyectoChange = () => {
-  const selected = tiposProyecto.find(opt => opt.id === props.op.tipo_proyecto);
+  const selected = tiposProyecto.value.find(opt => opt.id === props.op.tipo_proyecto);
   if (selected) {
     props.op.tipo_proyecto_id = selected.id;
     props.op.tipo_proyecto_nombre = selected.nombre;
@@ -277,77 +304,12 @@ const onTipoProyectoChange = () => {
 };
 
 const onTipoContratacionChange = () => {
-  const selected = tiposContratacion.find(opt => opt.id === props.op.tipo_contratacion);
+  const selected = tiposContratacion.value.find(opt => opt.id === props.op.tipo_contratacion);
   if (selected) {
     props.op.tipo_contratacion_id = selected.id;
     props.op.tipo_contratacion_nombre = selected.nombre;
   }
 };
-const tiposRegistro = [
-  { id: 1, nombre: 'Industria' },
-  { id: 2, nombre: 'Educacion' },
-  { id: 3, nombre: 'Estado' }
-];
-
-const origenes = [
-  { id: 1, nombre: 'Mercadeo' },
-  { id: 2, nombre: 'Ventas' }
-];
-
-const mediosIdentificacion = [
-  { id: 1, nombre: 'Cliente' },
-  { id: 2, nombre: 'Congresos y Seminarios' },
-  { id: 3, nombre: 'Correo electrónico' },
-  { id: 4, nombre: 'Demostraciones' },
-  { id: 5, nombre: 'Evento Comercial' },
-  { id: 6, nombre: 'Evento de Mercadeo Presencial' },
-  { id: 7, nombre: 'Feria de Proveedores' },
-  { id: 8, nombre: 'Llamada Telefónica' },
-  { id: 9, nombre: 'Mailing' },
-  { id: 10, nombre: 'Mapa de Inversiones' },
-  { id: 11, nombre: 'Medios de Comunicación' },
-  { id: 12, nombre: 'Página Web Avántika' },
-  { id: 13, nombre: 'Página Web Cliente' },
-  { id: 14, nombre: 'Plan de Compras' },
-  { id: 15, nombre: 'Plataforma del cliente' },
-  { id: 16, nombre: 'Promoción' },
-  { id: 17, nombre: 'Proveedor' },
-  { id: 18, nombre: 'Proyeccion de Ventas' },
-  { id: 19, nombre: 'Redes Sociales' },
-  { id: 20, nombre: 'Referido' },
-  { id: 21, nombre: 'Visita' },
-  { id: 22, nombre: 'Webinars' }
-];
-
-const tiemposEjecucion = [
-  { id: 1, nombre: 'Menor a 3 dias' },
-  { id: 2, nombre: 'Entre 4 y 8 dias' },
-  { id: 3, nombre: 'Entre 9 y 15 dias' },
-  { id: 4, nombre: 'Entre 16 y 30 dias' },
-  { id: 5, nombre: 'Entre 31 y 45 dias' },
-  { id: 6, nombre: 'Entre 46 y 60 dias' },
-  { id: 7, nombre: 'Entre 61 y 90 dias' },
-  { id: 8, nombre: 'Entre 91 y 120 dias' },
-  { id: 9, nombre: 'Entre 121 y 150 dias' },
-  { id: 10, nombre: 'Mas de 151 dias' },
-  { id: 11, nombre: 'Anual' }
-];
-
-const tiposProyecto = [
-  { id: 1, nombre: 'Proyecto Especial Naranja' },
-  { id: 2, nombre: 'Proyecto Base Azul' },
-  { id: 3, nombre: 'Comercial' }
-];
-
-const tiposContratacion = [
-  { id: 1, nombre: 'Compra Directa' },
-  { id: 2, nombre: 'Licitación Pública' },
-  { id: 3, nombre: 'Selección Abreviada' },
-  { id: 4, nombre: 'Contratación Directa' },
-  { id: 5, nombre: 'Mínima Cuantía' },
-  { id: 6, nombre: 'Acuerdo Marco' },
-  { id: 7, nombre: 'Contrato de Prestación de Servicios' }
-];
 </script>
 
 <style scoped>

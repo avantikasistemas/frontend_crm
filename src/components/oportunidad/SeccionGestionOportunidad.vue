@@ -93,7 +93,9 @@
 </template>
 
 <script setup>
+import { ref, onMounted, watch } from 'vue';
 import PipelineEstados from './PipelineEstados.vue';
+import { useCatalogos } from '../../services/useCatalogos.js';
 
 const props = defineProps({
   op: {
@@ -106,38 +108,27 @@ const props = defineProps({
   },
 });
 
-const tiposAdjudicacion = [
-  { id: 1, nombre: 'Total' },
-  { id: 2, nombre: 'Parcial' }
-];
+// Cargar catálogos desde la BD
+const { catalogos, cargarCatalogos } = useCatalogos();
 
-const motivosNoAdjudicacion = [
-  { id: 1, nombre: 'Cambio de la necesidad inicial' },
-  { id: 2, nombre: 'Cliente no cuenta con presupuesto aprobado' },
-  { id: 3, nombre: 'Cliente no requiere el producto' },
-  { id: 4, nombre: 'Cliente ya no necesita el/los productos' },
-  { id: 5, nombre: 'Cumplir con las especificaciones Técnicas del Cliente' },
-  { id: 6, nombre: 'Cumplir o Subsanar requisitos habilitantes- Financieros' },
-  { id: 7, nombre: 'Cumplir o Subsanar requisitos habilitantes- Juridicos' },
-  { id: 8, nombre: 'Cumplir o Subsanar requisitos habilitantes-Tecnicos' },
-  { id: 9, nombre: 'Disponibilidad de Muestras de productos o equipos en Demo' },
-  { id: 10, nombre: 'Entregar cotización a tiempo' },
-  { id: 11, nombre: 'Mejorar evaluación como Proveedor' },
-  { id: 12, nombre: 'Mejorar plazos de pago y/o Cupo de credito' },
-  { id: 13, nombre: 'Mejorar precio de venta unitario o Total' },
-  { id: 14, nombre: 'No aprobación de presupuesto del Cliente' },
-  { id: 15, nombre: 'No se realizo contacto con usuario' },
-  { id: 16, nombre: 'Ofertar menor tiempo de entrega' },
-  { id: 17, nombre: 'Ofertar Productos de Marcas Estratégicas' },
-  { id: 18, nombre: 'Ofertar valores agregados o ponderables' },
-  { id: 19, nombre: 'Orden de Compra recibida o Contrato' },
-  { id: 20, nombre: 'Sin Gestion Comercial' },
-  { id: 21, nombre: 'Tener disponibilidad de productos en Stock' }
-];
+// Referencias a los catálogos
+const tiposAdjudicacion = ref([]);
+const motivosNoAdjudicacion = ref([]);
+
+// Cargar catálogos al montar el componente
+onMounted(async () => {
+  try {
+    await cargarCatalogos();
+    tiposAdjudicacion.value = catalogos.value.tiposAdjudicacion;
+    motivosNoAdjudicacion.value = catalogos.value.motivosNoAdjudicacion;
+  } catch (error) {
+    console.error('Error cargando catálogos:', error);
+  }
+});
 
 // Función onChange para guardar id y nombre del motivo
 const onMotivoNoAdjudicacionChange = () => {
-  const selected = motivosNoAdjudicacion.find(opt => opt.id === props.op.motivo_no_adjudicacion);
+  const selected = motivosNoAdjudicacion.value.find(opt => opt.id === props.op.motivo_no_adjudicacion);
   if (selected) {
     props.op.motivo_no_adjudicacion_id = selected.id;
     props.op.motivo_no_adjudicacion_nombre = selected.nombre;
@@ -155,7 +146,7 @@ const onEstadoChange = () => {
 
 // Función onChange para guardar id y nombre del tipo de adjudicación
 const onTipoAdjudicacionChange = () => {
-  const selected = tiposAdjudicacion.find(opt => opt.id === props.op.tipo_adjudicacion);
+  const selected = tiposAdjudicacion.value.find(opt => opt.id === props.op.tipo_adjudicacion);
   if (selected) {
     props.op.tipo_adjudicacion_id = selected.id;
     props.op.tipo_adjudicacion_nombre = selected.nombre;
