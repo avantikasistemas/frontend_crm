@@ -27,6 +27,11 @@
       </div>
 
       <div class="field">
+        <label>Owner</label>
+        <input v-model="filtroOwner" type="text" placeholder="Filtrar por owner..." />
+      </div>
+
+      <div class="field">
         <label>Estado</label>
         <select v-model="filtroEstado">
           <option value="">Todos</option>
@@ -110,6 +115,7 @@ const oportunidades = ref([]);
 const busqueda = ref('');
 const filtroZona = ref('');
 const filtroEstado = ref('');
+const filtroOwner = ref('');
 const pagina = ref(1);
 const pageSize = 30;
 const totalRegistros = ref(0);
@@ -147,7 +153,8 @@ async function cargar() {
         page_size: pageSize,
         busqueda: busqueda.value,
         zona: filtroZona.value,
-        estado: filtroEstado.value
+        estado: filtroEstado.value,
+        owner: filtroOwner.value
       },
       {
         headers: {
@@ -201,7 +208,7 @@ function formatMonto(val) {
   }
 }
 
-watch([busqueda, filtroZona, filtroEstado], () => {
+watch([busqueda, filtroZona, filtroEstado, filtroOwner], () => {
   pagina.value = 1;
   cargar();
 });
@@ -250,12 +257,12 @@ h1 {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px 16px;
 }
 
 .field.full {
-  grid-column: span 3;
+  grid-column: span 4;
 }
 
 label {
