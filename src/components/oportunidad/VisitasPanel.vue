@@ -62,18 +62,68 @@
 
         <div class="field">
           <label>Contacto</label>
-          <select v-model="draft.contacto" :disabled="esCompletada">
-            <option value="">-- Seleccione --</option>
-            <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
-              {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
-            </option>
-          </select>
-          <p class="hint" v-if="contactos.length === 0">No hay contactos disponibles</p>
+          <div class="contacto-field">
+            <select v-model="draft.contacto" :disabled="esCompletada">
+              <option value="">-- Seleccione --</option>
+              <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
+                {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
+              </option>
+            </select>
+            <button 
+              v-if="!esCompletada && props.empresaNit" 
+              type="button" 
+              class="btn-add-contacto"
+              @click="mostrarFormContacto = !mostrarFormContacto"
+              :title="mostrarFormContacto ? 'Cancelar' : 'Agregar nuevo contacto'"
+            >
+              {{ mostrarFormContacto ? '✕' : '+' }}
+            </button>
+          </div>
+          <p class="hint" v-if="contactos.length === 0 && !mostrarFormContacto">No hay contactos disponibles</p>
+          
+          <!-- Formulario para agregar contacto -->
+          <div v-if="mostrarFormContacto" class="form-nuevo-contacto">
+            <div class="field-inline">
+              <div>
+                <label>Nombre</label>
+                <input v-model="nuevoContacto.nombre" type="text" placeholder="Nombre del contacto" />
+              </div>
+              <div>
+                <label>Teléfono</label>
+                <input v-model="nuevoContacto.tel_celular" type="text" placeholder="Teléfono" />
+              </div>
+              <button type="button" class="btn-save-contacto" @click="guardarNuevoContacto">
+                Guardar
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="field full">
           <label>Objetivo</label>
           <input v-model="draft.objetivo" type="text" :disabled="esCompletada" />
+        </div>
+
+        <div class="field full">
+          <label>Comentarios (máx. 150 caracteres)</label>
+          <textarea 
+            v-model="draft.comentarios" 
+            :maxlength="150"
+            :disabled="esCompletada"
+            rows="3"
+            placeholder="Ingrese comentarios adicionales..."
+          ></textarea>
+          <p class="hint">{{ (draft.comentarios || '').length }}/150 caracteres</p>
+        </div>
+
+        <div class="field">
+          <label>Resultado</label>
+          <select v-model="draft.resultado_id" :disabled="esCompletada">
+            <option value="">-- Seleccione --</option>
+            <option v-for="opt in resultadosVisitas" :key="opt.id" :value="opt.id">
+              {{ opt.nombre }}
+            </option>
+          </select>
         </div>
 
         <div class="field">
@@ -121,6 +171,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import axios from 'axios';
 import apiUrl from '../../../config.js';
+import { useCatalogos } from '../../services/useCatalogos.js';
 
 const props = defineProps({
   oportunidadId: {
@@ -139,6 +190,15 @@ const mostrarForm = ref(false);
 const edicion = ref(false);
 const draft = ref(crearDraft());
 const estadoOriginal = ref(null); // Guarda el estado_id original de la BD
+const mostrarFormContacto = ref(false);
+const nuevoContacto = ref({
+  nombre: '',
+  tel_celular: ''
+});
+
+// Cargar catálogos
+const { catalogos } = useCatalogos();
+const resultadosVisitas = computed(() => catalogos.value.resultadosVisitas || []);
 
 const tiposVisita = [
   { id: 1, nombre: 'Visita de Prospección' },
@@ -177,6 +237,8 @@ function crearDraft() {
     estado_id: 1,
     estado_nombre: 'Abierto',
     fecha_cierre_real: null,
+    comentarios: '',
+    resultado_id: null,
   };
 }
 
@@ -251,6 +313,50 @@ function editar(v) {
 
 function cerrarForm() {
   mostrarForm.value = false;
+  mostrarFormContacto.value = false;
+  nuevoContacto.value = { nombre: '', tel_celular: '' };
+}
+
+async function guardarNuevoContacto() {
+  if (!nuevoContacto.value.nombre) {
+    alert('El nombre del contacto es obligatorio');
+    return;
+  }
+  
+  if (!props.empresaNit) {
+    alert('No hay un NIT de empresa seleccionado');
+    return;
+  }
+  
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/contactos/guardar`,
+      {
+        nit: props.empresaNit,
+        nombre: nuevoContacto.value.nombre,
+        tel_celular: nuevoContacto.value.tel_celular
+      },
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+    
+    if (response.data.code === 201) {
+      alert('Contacto guardado exitosamente');
+      // Recargar contactos
+      await cargarContactos();
+      // Limpiar formulario
+      nuevoContacto.value = { nombre: '', tel_celular: '' };
+      mostrarFormContacto.value = false;
+    } else {
+      alert(`Error: ${response.data.message}`);
+    }
+  } catch (error) {
+    console.error('Error guardando contacto:', error);
+    alert('Error al guardar el contacto');
+  }
 }
 
 // Función onChange para tipo
@@ -317,6 +423,16 @@ watch(
   () => props.oportunidadId,
   () => cargarVisitas(),
   { immediate: true }
+);
+
+// Watch para recargar contactos cuando cambie empresaNit
+watch(
+  () => props.empresaNit,
+  (newNit) => {
+    if (newNit && mostrarForm.value) {
+      cargarContactos();
+    }
+  }
 );
 
 onMounted(() => cargarVisitas());
@@ -434,7 +550,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   box-sizing: border-box;
   border-radius: 8px;
@@ -443,10 +560,13 @@ select {
   font-size: 13px;
   outline: none;
   background: #ffffff;
+  font-family: inherit;
+  resize: vertical;
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: #2c425c;
 }
 
@@ -487,5 +607,83 @@ select:focus {
 }
 .btn-outline:hover {
   background: #f4f6fb;
+}
+
+/* Estilos para el campo de contacto con botón + */
+.contacto-field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.contacto-field select {
+  flex: 1;
+}
+
+.btn-add-contacto {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid #2c425c;
+  background: #2c425c;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-add-contacto:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+/* Formulario para nuevo contacto */
+.form-nuevo-contacto {
+  margin-top: 8px;
+  padding: 10px;
+  background: #f7f8fc;
+  border-radius: 8px;
+  border: 1px dashed #c6ccd8;
+}
+
+.field-inline {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.field-inline label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #404858;
+  margin-bottom: 3px;
+}
+
+.field-inline input {
+  width: 100%;
+}
+
+.btn-save-contacto {
+  border-radius: 8px;
+  padding: 6px 12px;
+  border: none;
+  background: #10b981;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  height: 32px;
+  white-space: nowrap;
+}
+
+.btn-save-contacto:hover {
+  background: #059669;
 }
 </style>

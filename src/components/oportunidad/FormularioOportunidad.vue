@@ -47,17 +47,17 @@ const props = defineProps({
 
 const emit = defineEmits(['save', 'cancel']);
 
-// Cargar catálogos desde la BD
-const { catalogos, cargarCatalogos } = useCatalogos();
+// Cargar catálogos desde la BD (ya cargados por el componente padre)
+const { catalogos } = useCatalogos();
 const estados = ref([]);
 
 // Cargar estados al montar el componente
 onMounted(async () => {
   try {
-    await cargarCatalogos();
+    // Los catálogos ya están cargados por el componente padre
     estados.value = catalogos.value.estados;
   } catch (error) {
-    console.error('Error cargando estados:', error);
+    console.error('Error accediendo a estados:', error);
   }
 });
 

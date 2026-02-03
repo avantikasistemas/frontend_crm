@@ -27,8 +27,8 @@
       </div>
 
       <div class="field">
-        <label>Owner</label>
-        <input v-model="filtroOwner" type="text" placeholder="Filtrar por owner..." />
+        <label>Responsable</label>
+        <input v-model="filtroOwner" type="text" placeholder="Filtrar por responsable..." />
       </div>
 
       <div class="field">
@@ -50,7 +50,7 @@
             <th>Nombre</th>
             <th>Empresa</th>
             <th>Zona</th>
-            <th>Owner</th>
+            <th>Responsable</th>
             <th>Estado</th>
             <th>Monto</th>
             <th>Fecha cierre</th>

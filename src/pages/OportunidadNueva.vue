@@ -22,13 +22,15 @@
 </template>
 
 <script setup>
-import { reactive } from 'vue';
+import { reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import apiUrl from '../../config.js';
 import FormularioOportunidad from '../components/oportunidad/FormularioOportunidad.vue';
+import { useCatalogos } from '../services/useCatalogos.js';
 
 const router = useRouter();
+const { catalogos, cargarCatalogos, isLoaded: catalogosCargados } = useCatalogos();
 
 const op = reactive({
   id: null,
@@ -60,6 +62,11 @@ const op = reactive({
   numero_pedidos: '',
   zona: '',
   owner: '',
+});
+
+onMounted(async () => {
+  // Cargar catálogos una sola vez para todos los componentes hijos
+  await cargarCatalogos();
 });
 
 async function guardar() {

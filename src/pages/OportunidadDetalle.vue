@@ -39,6 +39,7 @@ import axios from 'axios';
 import apiUrl from '../../config.js';
 import FormularioOportunidad from '../components/oportunidad/FormularioOportunidad.vue';
 import VisitasPanel from '../components/oportunidad/VisitasPanel.vue';
+import { useCatalogos } from '../services/useCatalogos.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -76,8 +77,12 @@ const op = reactive({
 });
 
 const cargado = ref(false);
+const { catalogos, cargarCatalogos, isLoaded: catalogosCargados } = useCatalogos();
 
 onMounted(async () => {
+  // Cargar catálogos una sola vez para todos los componentes hijos
+  await cargarCatalogos();
+  
   const id = route.params.id;
   await cargarOportunidad(id);
 });

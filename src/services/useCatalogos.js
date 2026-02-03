@@ -13,7 +13,8 @@ const catalogos = ref({
   tiposContratacion: [],
   tiposAdjudicacion: [],
   motivosNoAdjudicacion: [],
-  estados: []
+  estados: [],
+  resultadosVisitas: []
 });
 
 const isLoading = ref(false);

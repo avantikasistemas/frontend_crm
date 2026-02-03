@@ -108,8 +108,8 @@ const props = defineProps({
   },
 });
 
-// Cargar catálogos desde la BD
-const { catalogos, cargarCatalogos } = useCatalogos();
+// Cargar catálogos desde la BD (ya cargados por el componente padre)
+const { catalogos } = useCatalogos();
 
 // Referencias a los catálogos
 const tiposAdjudicacion = ref([]);
@@ -118,11 +118,11 @@ const motivosNoAdjudicacion = ref([]);
 // Cargar catálogos al montar el componente
 onMounted(async () => {
   try {
-    await cargarCatalogos();
+    // Los catálogos ya están cargados por el componente padre
     tiposAdjudicacion.value = catalogos.value.tiposAdjudicacion;
     motivosNoAdjudicacion.value = catalogos.value.motivosNoAdjudicacion;
   } catch (error) {
-    console.error('Error cargando catálogos:', error);
+    console.error('Error accediendo a catálogos:', error);
   }
 });
 

@@ -160,10 +160,10 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['guardar']);
+const emit = defineEmits(['guardar', 'empresa-changed']);
 
-// Cargar catálogos desde la BD
-const { catalogos, cargarCatalogos } = useCatalogos();
+// Cargar catálogos desde la BD (ya cargados por el componente padre)
+const { catalogos } = useCatalogos();
 
 // Referencias a los catálogos
 const tiposRegistro = ref([]);
@@ -176,7 +176,7 @@ const tiposContratacion = ref([]);
 // Cargar catálogos al montar el componente
 onMounted(async () => {
   try {
-    await cargarCatalogos();
+    // Los catálogos ya están cargados por el componente padre
     tiposRegistro.value = catalogos.value.tipoRegistros;
     origenes.value = catalogos.value.origenes;
     mediosIdentificacion.value = catalogos.value.mediosIdentificacion;
@@ -184,7 +184,7 @@ onMounted(async () => {
     tiposProyecto.value = catalogos.value.tiposProyecto;
     tiposContratacion.value = catalogos.value.tiposContratacion;
   } catch (error) {
-    console.error('Error cargando catálogos:', error);
+    console.error('Error accediendo a catálogos:', error);
   }
 });
 
@@ -247,6 +247,9 @@ const selectTercero = (tercero) => {
   props.op.owner = tercero.ejecutivo || '';
   filteredTerceros.value = [];
   showSuggestions.value = false;
+  
+  // Emitir evento de cambio de empresa
+  emit('empresa-changed', tercero.nit);
 };
 
 // Manejar el blur del input

@@ -61,13 +61,61 @@
 
         <div class="field">
           <label>Contacto</label>
-          <select v-model="draft.contacto" :disabled="esCompletada">
-            <option value="">-- Seleccione --</option>
-            <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
-              {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
-            </option>
-          </select>
+          <div style="display: flex; gap: 8px; align-items: start;">
+            <select v-model="draft.contacto" :disabled="esCompletada" style="flex: 1;">
+              <option value="">-- Seleccione --</option>
+              <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
+                {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
+              </option>
+            </select>
+            <button 
+              v-if="!esCompletada && draft.cliente_nit"
+              type="button" 
+              class="btn-icon" 
+              @click="mostrarFormContacto = !mostrarFormContacto"
+              title="Agregar nuevo contacto"
+            >
+              +
+            </button>
+          </div>
           <p class="hint" v-if="contactos.length === 0">No hay contactos disponibles</p>
+          
+          <!-- Formulario inline para crear contacto -->
+          <div v-if="mostrarFormContacto" style="margin-top: 12px; padding: 12px; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input 
+                v-model="nuevoContacto.nombre" 
+                type="text" 
+                placeholder="Nombre del contacto"
+                style="width: 100%;"
+              />
+              <input 
+                v-model="nuevoContacto.telefono" 
+                type="text" 
+                placeholder="Teléfono"
+                style="width: 100%;"
+              />
+              <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button 
+                  type="button" 
+                  class="btn-outline" 
+                  @click="mostrarFormContacto = false; nuevoContacto.nombre = ''; nuevoContacto.telefono = '';"
+                  style="font-size: 0.875rem; padding: 6px 12px;"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button" 
+                  class="btn-primary" 
+                  @click="guardarNuevoContacto"
+                  :disabled="!nuevoContacto.nombre || !nuevoContacto.telefono"
+                  style="font-size: 0.875rem; padding: 6px 12px;"
+                >
+                  Guardar contacto
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="field">
@@ -94,6 +142,30 @@
         <div class="field full">
           <label>Objetivo</label>
           <input v-model="draft.objetivo" type="text" :disabled="esCompletada" />
+        </div>
+
+        <div class="field full">
+          <label>Comentarios</label>
+          <textarea 
+            v-model="draft.comentarios" 
+            maxlength="150" 
+            rows="3"
+            :disabled="esCompletada"
+            placeholder="Ingrese comentarios sobre la visita (máximo 150 caracteres)"
+          ></textarea>
+          <p class="hint" style="text-align: right; margin-top: 4px; font-size: 0.75rem;">
+            {{ draft.comentarios?.length || 0 }} / 150
+          </p>
+        </div>
+
+        <div class="field">
+          <label>Resultado</label>
+          <select v-model.number="draft.resultado_id" :disabled="esCompletada">
+            <option :value="null">-- Seleccione --</option>
+            <option v-for="opt in resultadosVisitas" :key="opt.id" :value="opt.id">
+              {{ opt.nombre }}
+            </option>
+          </select>
         </div>
 
         <div class="field full">
@@ -187,6 +259,9 @@
 import { ref, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 import apiUrl from '../../config.js';
+import { useCatalogos } from '../services/useCatalogos.js';
+
+const { catalogos, cargarCatalogos } = useCatalogos();
 
 const visitas = ref([]);
 const busqueda = ref('');
@@ -198,6 +273,11 @@ const totalPaginas = ref(1);
 const cargando = ref(false);
 
 const editando = ref(false);
+const mostrarFormContacto = ref(false);
+const nuevoContacto = ref({
+  nombre: '',
+  telefono: ''
+});
 const draft = ref(crearDraft());
 const estadoOriginal = ref(null); // Estado original de la visita desde BD
 
@@ -216,6 +296,9 @@ let searchTimeout = null;
 
 // Para contactos
 const contactos = ref([]);
+
+// Computed para resultados de visitas
+const resultadosVisitas = computed(() => catalogos.value.resultadosVisitas || []);
 
 const estadosVisita = [
   { id: 1, nombre: 'Abierto' },
@@ -246,6 +329,8 @@ function crearDraft() {
     tipo_nombre: '',
     contacto: '',
     objetivo: '',
+    comentarios: '',
+    resultado_id: null,
     fecha_hora: '',
     estado_id: 1,
     estado_nombre: 'Abierto',
@@ -283,6 +368,8 @@ async function cargar() {
         tipo_nombre: v.tipo_nombre,
         contacto: v.contacto,
         objetivo: v.objetivo,
+        comentarios: v.comentarios || '',
+        resultado_id: v.resultado_id ? parseInt(v.resultado_id) : null,
         fecha_hora: v.fecha_hora,
         estado: v.estado_nombre,
         estado_id: v.estado_id,
@@ -340,6 +427,8 @@ async function guardarVisita() {
     tipo_nombre: tipoSeleccionado?.nombre || '',
     contacto: draft.value.contacto || '',
     objetivo: draft.value.objetivo || '',
+    comentarios: draft.value.comentarios || '',
+    resultado_id: draft.value.resultado_id ? parseInt(draft.value.resultado_id) : null,
     fecha_hora: draft.value.fecha_hora,
     estado_id: draft.value.estado_id,
     estado_nombre: estadoSeleccionado?.nombre || ''
@@ -419,6 +508,48 @@ function onBlurCliente() {
   }, 200);
 }
 
+// Guardar nuevo contacto
+async function guardarNuevoContacto() {
+  if (!nuevoContacto.value.nombre || !nuevoContacto.value.telefono) {
+    alert('El nombre y teléfono son obligatorios');
+    return;
+  }
+
+  try {
+    const response = await axios.post(
+      `${apiUrl}/oportunidades/contactos/guardar`,
+      {
+        nit: draft.value.cliente_nit,
+        nombre: nuevoContacto.value.nombre,
+        tel_celular: nuevoContacto.value.telefono
+      },
+      {
+        headers: {
+          Accept: "application/json",
+        }
+      }
+    );
+
+    if (response.data.code === 200 || response.data.code === 201) {
+      // Recargar contactos
+      await cargarContactos(draft.value.cliente_nit);
+      
+      // Seleccionar automáticamente el nuevo contacto
+      draft.value.contacto = nuevoContacto.value.nombre;
+      
+      // Limpiar formulario y ocultar
+      nuevoContacto.value.nombre = '';
+      nuevoContacto.value.telefono = '';
+      mostrarFormContacto.value = false;
+    } else {
+      alert('Error al guardar el contacto');
+    }
+  } catch (error) {
+    console.error('Error guardando contacto:', error);
+    alert('Error al guardar el contacto');
+  }
+}
+
 // Cargar contactos
 async function cargarContactos(nit) {
   if (!nit) {
@@ -493,7 +624,19 @@ watch([busqueda, filtroEstado], () => {
   cargar();
 });
 
+// Watch para recargar contactos cuando cambie el cliente
+watch(() => draft.value.cliente_nit, (nuevoNit, anteriorNit) => {
+  if (nuevoNit && nuevoNit !== anteriorNit) {
+    cargarContactos(nuevoNit);
+    // Limpiar el contacto seleccionado si el cliente cambió
+    if (anteriorNit) {
+      draft.value.contacto = '';
+    }
+  }
+});
+
 onMounted(() => {
+  cargarCatalogos();
   cargar();
 });
 </script>
@@ -557,7 +700,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   box-sizing: border-box;
   border-radius: 8px;
@@ -566,11 +710,18 @@ select {
   font-size: 13px;
   outline: none;
   background: #ffffff;
+  font-family: inherit;
 }
 
 input:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: #2c425c;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 60px;
 }
 
 .hint {
@@ -606,6 +757,28 @@ select:focus {
   font-size: 13px;
 }
 .btn-outline:hover { background: #f4f6fb; }
+
+.btn-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid #2c425c;
+  background: #ffffff;
+  color: #2c425c;
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.btn-icon:hover {
+  background: #2c425c;
+  color: #ffffff;
+}
 
 .filters {
   display: grid;
