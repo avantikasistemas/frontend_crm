@@ -124,6 +124,33 @@
         </div>
 
         <div class="field">
+          <label>Ejecutivo</label>
+          <div class="search-input-wrapper">
+            <input 
+              v-model="ejecutivoDisplay" 
+              type="text" 
+              placeholder="Buscar ejecutivo..."
+              @input="onSearchEjecutivo"
+              @focus="showEjecutivoSuggestions = true"
+              @blur="onBlurEjecutivo"
+              :disabled="esCompletada"
+            />
+            <div v-if="showEjecutivoSuggestions && filteredEjecutivos.length > 0" class="suggestions">
+              <div 
+                v-for="ejecutivo in filteredEjecutivos" 
+                :key="ejecutivo.nit_ejecutivo"
+                class="suggestion-item"
+                @mousedown.prevent="selectEjecutivo(ejecutivo)"
+              >
+                <div class="suggestion-title">{{ ejecutivo.ejecutivo }}</div>
+                <div class="suggestion-subtitle">NIT: {{ ejecutivo.nit_ejecutivo }}</div>
+              </div>
+            </div>
+            <div v-if="isSearchingEjecutivo" class="loading-indicator">Buscando...</div>
+          </div>
+        </div>
+
+        <div class="field">
           <label>Estado</label>
           <select v-model="draft.estado_id" @change="onEstadoChange" :disabled="esCompletada">
             <option v-for="opt in estadosVisita" :key="opt.id" :value="opt.id">
@@ -192,7 +219,7 @@
           <input
             v-model="busqueda"
             type="text"
-            placeholder="Buscar por cliente, asunto o tipo..."
+            placeholder="Buscar por cliente, ejecutivo, asunto o tipo..."
           />
         </div>
         <div class="field">
@@ -210,6 +237,7 @@
         <thead>
           <tr>
             <th>Cliente</th>
+            <th>Ejecutivo</th>
             <th>Asunto</th>
             <th>Tipo</th>
             <th>Contacto</th>
@@ -221,10 +249,11 @@
         </thead>
         <tbody>
           <tr v-if="paginadas.length === 0">
-            <td colspan="8" class="empty">No hay visitas registradas.</td>
+            <td colspan="9" class="empty">No hay visitas registradas.</td>
           </tr>
           <tr v-for="v in paginadas" :key="v.id">
             <td>{{ v.cliente_nombre }}</td>
+            <td>{{ v.ejecutivo_nombre || '-' }}</td>
             <td>{{ v.asunto }}</td>
             <td>{{ v.tipo }}</td>
             <td>{{ v.contacto || '-' }}</td>
@@ -281,6 +310,14 @@ const nuevoContacto = ref({
 const draft = ref(crearDraft());
 const estadoOriginal = ref(null); // Estado original de la visita desde BD
 
+// Para búsqueda de ejecutivos
+const ejecutivos = ref([]);
+const filteredEjecutivos = ref([]);
+const showEjecutivoSuggestions = ref(false);
+const isSearchingEjecutivo = ref(false);
+const ejecutivoDisplay = ref('');
+let searchEjecutivoTimeout = null;
+
 // Computed para determinar si la visita está completada y debe ser solo lectura
 const esCompletada = computed(() => {
   return editando.value && estadoOriginal.value === 2; // 2 = Completado
@@ -324,6 +361,8 @@ function crearDraft() {
     id: null,
     cliente_nit: '',
     cliente_nombre: '',
+    nit_ejecutivo: '',
+    ejecutivo_nombre: '',
     asunto: '',
     tipo_id: '',
     tipo_nombre: '',
@@ -361,8 +400,8 @@ async function cargar() {
       visitas.value = data.visitas.map(v => ({
         id: v.id,
         cliente_nit: v.cliente_nit,
-        cliente_nombre: v.cliente_nombre,
-        asunto: v.asunto,
+        cliente_nombre: v.cliente_nombre,        nit_ejecutivo: v.nit_ejecutivo,
+        ejecutivo_nombre: v.ejecutivo_nombre,        asunto: v.asunto,
         tipo: v.tipo_nombre,
         tipo_id: v.tipo_id,
         tipo_nombre: v.tipo_nombre,
@@ -391,6 +430,7 @@ function editar(v) {
   estadoOriginal.value = v.estado_id;
   editando.value = true;
   clienteDisplay.value = v.cliente_nombre;
+  ejecutivoDisplay.value = v.ejecutivo_nombre || '';
   
   // Cargar contactos del cliente
   if (v.cliente_nit) {
@@ -405,6 +445,7 @@ function cancelarEdicion() {
   estadoOriginal.value = null;
   editando.value = false;
   clienteDisplay.value = '';
+  ejecutivoDisplay.value = '';
   contactos.value = [];
 }
 
@@ -422,6 +463,8 @@ async function guardarVisita() {
     id: draft.value.id,
     cliente_nit: draft.value.cliente_nit,
     cliente_nombre: draft.value.cliente_nombre,
+    nit_ejecutivo: draft.value.nit_ejecutivo || '',
+    ejecutivo_nombre: draft.value.ejecutivo_nombre || '',
     asunto: draft.value.asunto,
     tipo_id: draft.value.tipo_id,
     tipo_nombre: tipoSeleccionado?.nombre || '',
@@ -505,6 +548,54 @@ function selectTercero(tercero) {
 function onBlurCliente() {
   setTimeout(() => {
     showSuggestions.value = false;
+  }, 200);
+}
+
+// Búsqueda de ejecutivos
+async function onSearchEjecutivo() {
+  const valor = ejecutivoDisplay.value.trim();
+  
+  if (valor.length < 2) {
+    filteredEjecutivos.value = [];
+    return;
+  }
+
+  clearTimeout(searchEjecutivoTimeout);
+  searchEjecutivoTimeout = setTimeout(async () => {
+    isSearchingEjecutivo.value = true;
+    try {
+      const response = await axios.post(
+        `${apiUrl}/oportunidades/ejecutivos`,
+        { valor },
+        {
+          headers: {
+            Accept: "application/json",
+          }
+        }
+      );
+
+      if (response.data.code === 200) {
+        filteredEjecutivos.value = response.data.data;
+      }
+    } catch (error) {
+      console.error('Error buscando ejecutivos:', error);
+    } finally {
+      isSearchingEjecutivo.value = false;
+    }
+  }, 300);
+}
+
+function selectEjecutivo(ejecutivo) {
+  draft.value.nit_ejecutivo = ejecutivo.nit_ejecutivo;
+  draft.value.ejecutivo_nombre = ejecutivo.ejecutivo;
+  ejecutivoDisplay.value = ejecutivo.ejecutivo + " - " + ejecutivo.nit_ejecutivo;
+  showEjecutivoSuggestions.value = false;
+  filteredEjecutivos.value = [];
+}
+
+function onBlurEjecutivo() {
+  setTimeout(() => {
+    showEjecutivoSuggestions.value = false;
   }, 200);
 }
 
