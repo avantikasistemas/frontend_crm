@@ -236,6 +236,7 @@
       <table class="table">
         <thead>
           <tr>
+            <th>ID</th>
             <th>Cliente</th>
             <th>Ejecutivo</th>
             <th>Asunto</th>
@@ -249,9 +250,10 @@
         </thead>
         <tbody>
           <tr v-if="paginadas.length === 0">
-            <td colspan="9" class="empty">No hay visitas registradas.</td>
+            <td colspan="10" class="empty">No hay visitas registradas.</td>
           </tr>
           <tr v-for="v in paginadas" :key="v.id">
+            <td>{{ v.id }}</td>
             <td>{{ v.cliente_nombre }}</td>
             <td>{{ v.ejecutivo_nombre || '-' }}</td>
             <td>{{ v.asunto }}</td>
