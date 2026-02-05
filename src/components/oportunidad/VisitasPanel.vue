@@ -132,6 +132,35 @@
         </div>
 
         <div class="field">
+          <label>Coordinador / Ejecutivo</label>
+          <div class="search-input-wrapper">
+            <input
+              v-model="ejecutivoDisplay"
+              type="text"
+              placeholder="Buscar por NIT o nombre..."
+              @input="onSearchEjecutivo"
+              @blur="onBlurEjecutivo"
+              :disabled="esCompletada"
+            />
+            <span v-if="isSearchingEjecutivo" class="loading-indicator">Buscando...</span>
+            <div
+              v-if="showEjecutivoSuggestions && filteredEjecutivos.length > 0"
+              class="suggestions"
+            >
+              <div
+                v-for="ej in filteredEjecutivos"
+                :key="ej.nit_ejecutivo"
+                class="suggestion-item"
+                @mousedown="selectEjecutivo(ej)"
+              >
+                <div class="suggestion-title">{{ ej.ejecutivo }}</div>
+                <div class="suggestion-subtitle">{{ ej.nit_ejecutivo }} · {{ ej.rol }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
           <label>Estado Visita</label>
           <select v-model="draft.estado_id" @change="onEstadoChange" :disabled="esCompletada">
             <option v-for="opt in estadosVisita" :key="opt.id" :value="opt.id">
@@ -196,6 +225,13 @@ const nuevoContacto = ref({
   tel_celular: ''
 });
 
+// Variables para búsqueda de ejecutivos
+const ejecutivoDisplay = ref('');
+const filteredEjecutivos = ref([]);
+const showEjecutivoSuggestions = ref(false);
+const isSearchingEjecutivo = ref(false);
+let searchEjecutivoTimeout = null;
+
 // Cargar catálogos
 const { catalogos } = useCatalogos();
 const resultadosVisitas = computed(() => catalogos.value.resultadosVisitas || []);
@@ -239,6 +275,8 @@ function crearDraft() {
     fecha_cierre_real: null,
     comentarios: '',
     resultado_id: null,
+    nit_ejecutivo: '',
+    ejecutivo_nombre: ''
   };
 }
 
@@ -296,6 +334,7 @@ function abrirNueva() {
   draft.value.oportunidad_id = props.oportunidadId;
   edicion.value = false;
   estadoOriginal.value = null; // Nueva visita, sin estado original
+  ejecutivoDisplay.value = '';
   mostrarForm.value = true;
   cargarContactos();
 }
@@ -307,6 +346,7 @@ function editar(v) {
   draft.value.estado_id = v.estado_id;
   edicion.value = true;
   estadoOriginal.value = v.estado_id; // Guardar el estado original de la BD
+  ejecutivoDisplay.value = v.ejecutivo_nombre || '';
   mostrarForm.value = true;
   cargarContactos();
 }
@@ -315,6 +355,9 @@ function cerrarForm() {
   mostrarForm.value = false;
   mostrarFormContacto.value = false;
   nuevoContacto.value = { nombre: '', tel_celular: '' };
+  ejecutivoDisplay.value = '';
+  filteredEjecutivos.value = [];
+  showEjecutivoSuggestions.value = false;
 }
 
 async function guardarNuevoContacto() {
@@ -373,6 +416,54 @@ const onEstadoChange = () => {
   if (selected) {
     draft.value.estado_nombre = selected.nombre;
   }
+};
+
+// Funciones para búsqueda de ejecutivos
+const onSearchEjecutivo = () => {
+  if (searchEjecutivoTimeout) clearTimeout(searchEjecutivoTimeout);
+  
+  const valor = ejecutivoDisplay.value?.trim();
+  if (!valor) {
+    filteredEjecutivos.value = [];
+    showEjecutivoSuggestions.value = false;
+    draft.value.nit_ejecutivo = '';
+    draft.value.ejecutivo_nombre = '';
+    return;
+  }
+
+  isSearchingEjecutivo.value = true;
+  searchEjecutivoTimeout = setTimeout(async () => {
+    try {
+      const response = await axios.post(
+        `${apiUrl}/oportunidades/ejecutivos`,
+        { valor },
+        { headers: { Accept: "application/json" } }
+      );
+      if (response.data.code === 200) {
+        filteredEjecutivos.value = response.data.data;
+        showEjecutivoSuggestions.value = true;
+      }
+    } catch (error) {
+      console.error('Error buscando ejecutivos:', error);
+      filteredEjecutivos.value = [];
+    } finally {
+      isSearchingEjecutivo.value = false;
+    }
+  }, 300);
+};
+
+const selectEjecutivo = (ej) => {
+  draft.value.nit_ejecutivo = ej.nit_ejecutivo;
+  draft.value.ejecutivo_nombre = ej.ejecutivo;
+  ejecutivoDisplay.value = ej.ejecutivo;
+  filteredEjecutivos.value = [];
+  showEjecutivoSuggestions.value = false;
+};
+
+const onBlurEjecutivo = () => {
+  setTimeout(() => {
+    showEjecutivoSuggestions.value = false;
+  }, 200);
 };
 
 async function guardarVisita() {
@@ -685,5 +776,60 @@ textarea:focus {
 
 .btn-save-contacto:hover {
   background: #059669;
+}
+
+/* Estilos para búsqueda de ejecutivos */
+.search-input-wrapper {
+  position: relative;
+}
+
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d3d7e4;
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.suggestion-item:hover {
+  background: #f7f8fc;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #2c425c;
+  margin-bottom: 2px;
+}
+
+.suggestion-subtitle {
+  font-size: 11px;
+  color: #7a7f8a;
+}
+
+.loading-indicator {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: #7a7f8a;
 }
 </style>

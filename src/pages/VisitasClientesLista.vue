@@ -124,12 +124,12 @@
         </div>
 
         <div class="field">
-          <label>Ejecutivo</label>
+          <label>Coordinador / Ejecutivo</label>
           <div class="search-input-wrapper">
             <input 
               v-model="ejecutivoDisplay" 
               type="text" 
-              placeholder="Buscar ejecutivo..."
+              placeholder="Buscar coordinador / ejecutivo..."
               @input="onSearchEjecutivo"
               @focus="showEjecutivoSuggestions = true"
               @blur="onBlurEjecutivo"
@@ -143,7 +143,7 @@
                 @mousedown.prevent="selectEjecutivo(ejecutivo)"
               >
                 <div class="suggestion-title">{{ ejecutivo.ejecutivo }}</div>
-                <div class="suggestion-subtitle">NIT: {{ ejecutivo.nit_ejecutivo }}</div>
+                <div class="suggestion-subtitle">{{ ejecutivo.rol }} • NIT: {{ ejecutivo.nit_ejecutivo }}</div>
               </div>
             </div>
             <div v-if="isSearchingEjecutivo" class="loading-indicator">Buscando...</div>
