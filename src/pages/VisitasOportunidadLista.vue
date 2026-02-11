@@ -32,6 +32,7 @@
       <table class="table">
         <thead>
           <tr>
+            <th>Id</th>
             <th>Oportunidad</th>
             <th>Asunto</th>
             <th>Tipo</th>
@@ -50,6 +51,7 @@
             </td>
           </tr>
           <tr v-for="v in paginadas" :key="v.id">
+            <td>{{ v.id }}</td>
             <td>
               <span class="op-num">{{ v.opNumero || '—' }}</span>
               <span class="op-nombre">{{ v.opNombre || '' }}</span>
@@ -100,13 +102,13 @@
         <div class="modal-body">
           <div class="form-grid">
             <div class="field">
-              <label>Asunto</label>
-              <input v-model="modalDraft.asunto" type="text" :disabled="esCompletada" />
+              <label>Asunto <span class="required">*</span></label>
+              <input v-model="modalDraft.asunto" type="text" :disabled="esCompletada" :class="{ 'error': camposConError.has('asunto') }" />
             </div>
 
             <div class="field">
-              <label>Tipo</label>
-              <select v-model="modalDraft.tipo_id" :disabled="esCompletada">
+              <label>Tipo <span class="required">*</span></label>
+              <select v-model="modalDraft.tipo_id" :disabled="esCompletada" :class="{ 'error': camposConError.has('tipo_id') }">
                 <option value="">-- Seleccione --</option>
                 <option v-for="opt in tiposVisita" :key="opt.id" :value="opt.id">
                   {{ opt.nombre }}
@@ -115,9 +117,9 @@
             </div>
 
             <div class="field">
-              <label>Contacto</label>
+              <label>Contacto <span class="required">*</span></label>
               <div class="contacto-field">
-                <select v-model="modalDraft.contacto" :disabled="esCompletada">
+                <select v-model="modalDraft.contacto" :disabled="esCompletada" :class="{ 'error': camposConError.has('contacto') }">
                   <option value="">-- Seleccione --</option>
                   <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
                     {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
@@ -154,8 +156,8 @@
             </div>
 
             <div class="field full">
-              <label>Objetivo</label>
-              <input v-model="modalDraft.objetivo" type="text" :disabled="esCompletada" />
+              <label>Objetivo <span class="required">*</span></label>
+              <input v-model="modalDraft.objetivo" type="text" :disabled="esCompletada" :class="{ 'error': camposConError.has('objetivo') }" />
             </div>
 
             <div class="field full">
@@ -171,8 +173,8 @@
             </div>
 
             <div class="field">
-              <label>Resultado</label>
-              <select v-model.number="modalDraft.resultado_id" :disabled="esCompletada">
+              <label>Resultado <span class="required">*</span></label>
+              <select v-model.number="modalDraft.resultado_id" :disabled="esCompletada" :class="{ 'error': camposConError.has('resultado_id') }">
                 <option :value="null">-- Seleccione --</option>
                 <option v-for="opt in resultadosVisitas" :key="opt.id" :value="opt.id">
                   {{ opt.nombre }}
@@ -181,16 +183,16 @@
             </div>
 
             <div class="field">
-              <label>Fecha</label>
-              <input v-model="modalDraft.fecha" type="date" :disabled="esCompletada" />
+              <label>Fecha <span class="required">*</span></label>
+              <input v-model="modalDraft.fecha" type="date" :disabled="esCompletada" :class="{ 'error': camposConError.has('fecha') }" />
             </div>
 
             <div class="field">
-              <label>Hora</label>
-              <input v-model="modalDraft.hora" type="time" :disabled="esCompletada" />
+              <label>Hora <span class="required">*</span></label>
+              <input v-model="modalDraft.hora" type="time" :disabled="esCompletada" :class="{ 'error': camposConError.has('hora') }" />
             </div>
 
-            <div class="field">              <label>Coordinador / Ejecutivo</label>
+            <div class="field">              <label>Coordinador / Ejecutivo <span class="required">*</span></label>
               <div class="search-input-wrapper">
                 <input 
                   v-model="ejecutivoDisplay" 
@@ -200,6 +202,7 @@
                   @focus="showEjecutivoSuggestions = true"
                   @blur="onBlurEjecutivo"
                   :disabled="esCompletada"
+                  :class="{ 'error': camposConError.has('nit_ejecutivo') }"
                 />
                 <div v-if="showEjecutivoSuggestions && filteredEjecutivos.length > 0" class="suggestions">
                   <div 
@@ -284,6 +287,7 @@ const pageSize = 30;
 const totalRegistros = ref(0);
 const totalPaginas = ref(1);
 const cargando = ref(false);
+const camposConError = ref(new Set()); // Para rastrear campos con errores
 
 const estadosVisita = [
   { id: 1, nombre: 'Abierto' },
@@ -459,11 +463,28 @@ function cerrarModal() {
   ejecutivoDisplay.value = '';
   mostrarFormContacto.value = false;
   nuevoContacto.value = { nombre: '', tel_celular: '' };
+  camposConError.value = new Set(); // Limpiar errores
+}
+
+function validarCampos() {
+  const errores = new Set();
+  
+  if (!modalDraft.value.asunto || !modalDraft.value.asunto.trim()) errores.add('asunto');
+  if (!modalDraft.value.tipo_id) errores.add('tipo_id');
+  if (!modalDraft.value.contacto) errores.add('contacto');
+  if (!modalDraft.value.objetivo || !modalDraft.value.objetivo.trim()) errores.add('objetivo');
+  if (!modalDraft.value.resultado_id) errores.add('resultado_id');
+  if (!modalDraft.value.fecha) errores.add('fecha');
+  if (!modalDraft.value.hora) errores.add('hora');
+  if (!modalDraft.value.nit_ejecutivo) errores.add('nit_ejecutivo');
+  
+  camposConError.value = errores;
+  return errores.size === 0;
 }
 
 async function guardarEdicion() {
-  if (!modalDraft.value.asunto || !modalDraft.value.tipo_id || !modalDraft.value.fecha) {
-    alert('Asunto, tipo y fecha son obligatorios.');
+  if (!validarCampos()) {
+    alert('Por favor complete todos los campos obligatorios resaltados en rojo.');
     return;
   }
 
@@ -510,7 +531,9 @@ async function guardarEdicion() {
     }
   } catch (error) {
     console.error('Error guardando visita:', error);
-    alert('Error al guardar la visita');
+    // Mostrar mensaje de error del backend si está disponible
+    const mensaje = error.response?.data?.message || 'Error al guardar la visita';
+    alert(mensaje);
   }
 }
 
@@ -668,6 +691,24 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: #2c425c;
+}
+
+input.error,
+select.error,
+textarea.error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+}
+
+input.error:focus,
+select.error:focus,
+textarea.error:focus {
+  border-color: #dc2626;
+}
+
+.required {
+  color: #dc2626;
+  font-weight: bold;
 }
 
 .table {

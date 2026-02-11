@@ -18,7 +18,7 @@
 
       <div class="form-grid">
         <div class="field">
-          <label>Cliente</label>
+          <label>Cliente <span class="required">*</span></label>
           <div class="search-input-wrapper">
             <input 
               v-model="clienteDisplay" 
@@ -28,6 +28,7 @@
               @focus="showSuggestions = true"
               @blur="onBlurCliente"
               :disabled="esCompletada"
+              :class="{ 'error': camposConError.has('cliente_nit') }"
             />
             <div v-if="showSuggestions && filteredTerceros.length > 0" class="suggestions">
               <div 
@@ -45,13 +46,13 @@
         </div>
 
         <div class="field">
-          <label>Asunto</label>
-          <input v-model="draft.asunto" type="text" :disabled="esCompletada" />
+          <label>Asunto <span class="required">*</span></label>
+          <input v-model="draft.asunto" type="text" :disabled="esCompletada" :class="{ 'error': camposConError.has('asunto') }" />
         </div>
 
         <div class="field">
-          <label>Tipo</label>
-          <select v-model="draft.tipo_id" @change="onTipoChange" :disabled="esCompletada">
+          <label>Tipo <span class="required">*</span></label>
+          <select v-model="draft.tipo_id" @change="onTipoChange" :disabled="esCompletada" :class="{ 'error': camposConError.has('tipo_id') }">
             <option value="">-- Seleccione --</option>
             <option v-for="opt in tiposVisita" :key="opt.id" :value="opt.id">
               {{ opt.nombre }}
@@ -60,9 +61,9 @@
         </div>
 
         <div class="field">
-          <label>Contacto</label>
+          <label>Contacto <span class="required">*</span></label>
           <div style="display: flex; gap: 8px; align-items: start;">
-            <select v-model="draft.contacto" :disabled="esCompletada" style="flex: 1;">
+            <select v-model="draft.contacto" :disabled="esCompletada" style="flex: 1;" :class="{ 'error': camposConError.has('contacto') }">
               <option value="">-- Seleccione --</option>
               <option v-for="c in contactos" :key="c.nombre" :value="c.nombre">
                 {{ c.nit }} - {{ c.nombre }} - {{ c.tel_celular }}
@@ -119,12 +120,12 @@
         </div>
 
         <div class="field">
-          <label>Fecha y Hora de Visita</label>
-          <input v-model="draft.fecha_hora" type="datetime-local" :disabled="esCompletada" />
+          <label>Fecha y Hora de Visita <span class="required">*</span></label>
+          <input v-model="draft.fecha_hora" type="datetime-local" :disabled="esCompletada" :class="{ 'error': camposConError.has('fecha_hora') }" />
         </div>
 
         <div class="field">
-          <label>Coordinador / Ejecutivo</label>
+          <label>Coordinador / Ejecutivo <span class="required">*</span></label>
           <div class="search-input-wrapper">
             <input 
               v-model="ejecutivoDisplay" 
@@ -134,6 +135,7 @@
               @focus="showEjecutivoSuggestions = true"
               @blur="onBlurEjecutivo"
               :disabled="esCompletada"
+              :class="{ 'error': camposConError.has('nit_ejecutivo') }"
             />
             <div v-if="showEjecutivoSuggestions && filteredEjecutivos.length > 0" class="suggestions">
               <div 
@@ -186,8 +188,8 @@
         </div>
 
         <div class="field">
-          <label>Resultado</label>
-          <select v-model.number="draft.resultado_id" :disabled="esCompletada">
+          <label>Resultado <span class="required">*</span></label>
+          <select v-model.number="draft.resultado_id" :disabled="esCompletada" :class="{ 'error': camposConError.has('resultado_id') }">
             <option :value="null">-- Seleccione --</option>
             <option v-for="opt in resultadosVisitas" :key="opt.id" :value="opt.id">
               {{ opt.nombre }}
@@ -311,6 +313,7 @@ const nuevoContacto = ref({
 });
 const draft = ref(crearDraft());
 const estadoOriginal = ref(null); // Estado original de la visita desde BD
+const camposConError = ref(new Set()); // Para rastrear campos con errores
 
 // Para búsqueda de ejecutivos
 const ejecutivos = ref([]);
@@ -449,11 +452,27 @@ function cancelarEdicion() {
   clienteDisplay.value = '';
   ejecutivoDisplay.value = '';
   contactos.value = [];
+  camposConError.value = new Set(); // Limpiar errores
+}
+
+function validarCampos() {
+  const errores = new Set();
+  
+  if (!draft.value.cliente_nit) errores.add('cliente_nit');
+  if (!draft.value.asunto || !draft.value.asunto.trim()) errores.add('asunto');
+  if (!draft.value.tipo_id) errores.add('tipo_id');
+  if (!draft.value.contacto) errores.add('contacto');
+  if (!draft.value.fecha_hora) errores.add('fecha_hora');
+  if (!draft.value.nit_ejecutivo) errores.add('nit_ejecutivo');
+  if (!draft.value.resultado_id) errores.add('resultado_id');
+  
+  camposConError.value = errores;
+  return errores.size === 0;
 }
 
 async function guardarVisita() {
-  if (!draft.value.cliente_nit || !draft.value.asunto || !draft.value.tipo_id || !draft.value.fecha_hora) {
-    alert('Cliente, asunto, tipo y fecha son obligatorios.');
+  if (!validarCampos()) {
+    alert('Por favor complete todos los campos obligatorios resaltados en rojo.');
     return;
   }
 
@@ -498,7 +517,9 @@ async function guardarVisita() {
     }
   } catch (error) {
     console.error('Error guardando visita de cliente:', error);
-    alert('Error al guardar la visita');
+    // Mostrar mensaje de error del backend si está disponible
+    const mensaje = error.response?.data?.message || 'Error al guardar la visita';
+    alert(mensaje);
   }
 }
 
@@ -810,6 +831,24 @@ input:focus,
 select:focus,
 textarea:focus {
   border-color: #2c425c;
+}
+
+input.error,
+select.error,
+textarea.error {
+  border-color: #dc2626;
+  background-color: #fef2f2;
+}
+
+input.error:focus,
+select.error:focus,
+textarea.error:focus {
+  border-color: #dc2626;
+}
+
+.required {
+  color: #dc2626;
+  font-weight: bold;
 }
 
 textarea {
